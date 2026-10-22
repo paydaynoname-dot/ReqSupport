@@ -1,1 +1,132 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ReqSupport — форум поддержки</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f6f7fb;--card:#fff;--tx:#1b1f2a;--mu:#6b7385;--ac:#4f46e5;--ac2:#eef0ff;--bd:#e3e6ef;--ok:#16a34a;--bad:#dc2626}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#12141c;--card:#1b1e2a;--tx:#e8eaf2;--mu:#9aa2b8;--ac:#8b85ff;--ac2:#262a45;--bd:#2c3042;--ok:#4ade80;--bad:#f87171}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#12141c;--card:#1b1e2a;--tx:#e8eaf2;--mu:#9aa2b8;--ac:#8b85ff;--ac2:#262a45;--bd:#2c3042;--ok:#4ade80;--bad:#f87171}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{background:var(--card);border-bottom:1px solid var(--bd);position:sticky;top:env(safe-area-inset-top,0px);z-index:5}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--card);z-index:10}
+.wrap{max-width:860px;margin:0 auto;padding:0 16px}
+.bar{display:flex;align-items:center;gap:12px;padding:12px 0;flex-wrap:wrap}
+.logo{font-weight:800;font-size:20px;cursor:pointer;margin-right:auto}.logo b{color:var(--ac)}
+button,input,select,textarea{font:inherit;color:inherit}
+.btn{background:var(--ac);color:#fff;border:0;border-radius:10px;padding:9px 16px;cursor:pointer;font-weight:600}
+.btn.ghost{background:var(--ac2);color:var(--ac)}.btn.sm{padding:6px 12px;font-size:14px}
+input,select,textarea{width:100%;background:var(--bg);border:1px solid var(--bd);border-radius:10px;padding:10px 12px;margin:4px 0 12px}
+textarea{min-height:110px;resize:vertical}
+.search{flex:1 1 100%}.search input{margin:0}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:14px 0 6px}
+.chip{white-space:nowrap;border:1px solid var(--bd);background:var(--card);border-radius:99px;padding:6px 14px;cursor:pointer;font-size:14px}
+.chip.on{background:var(--ac);border-color:var(--ac);color:#fff}
+.head{display:flex;justify-content:space-between;align-items:center;margin:14px 0}
+.head h2{margin:0;font-size:20px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px 16px;margin-bottom:10px}
+.topic{cursor:pointer}.topic:hover{border-color:var(--ac)}
+.topic h3{margin:0 0 4px;font-size:17px}
+.meta{color:var(--mu);font-size:13px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.tag{background:var(--ac2);color:var(--ac);border-radius:6px;padding:1px 8px;font-size:12px;font-weight:600}
+.ok{color:var(--ok);font-weight:600}
+.body{white-space:pre-wrap;word-wrap:break-word;margin:10px 0}
+.reply{border-left:3px solid var(--bd);margin-left:6px}.reply.best{border-color:var(--ok)}
+.back{background:none;border:0;color:var(--ac);cursor:pointer;padding:12px 0;font-weight:600}
+.modal{position:fixed;inset:0;background:#0009;display:none;align-items:center;justify-content:center;padding:16px;z-index:20}
+.modal.on{display:flex}
+.box{background:var(--card);border-radius:16px;padding:20px;width:100%;max-width:420px;max-height:90%;overflow:auto}
+.box h2{margin:0 0 12px}.err{color:var(--bad);font-size:14px;min-height:20px}
+.empty{text-align:center;color:var(--mu);padding:30px 0}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+footer{color:var(--mu);font-size:13px;text-align:center;padding:24px 16px}
+</style></head><body>
+<header><div class="wrap"><div class="bar">
+<div class="logo" onclick="go()">Req<b>Support</b></div>
+<span id="who"></span><span id="auth"></span>
+<div class="search"><input id="q" placeholder="Поиск по вопросам…" oninput="go()"></div>
+</div></div></header>
+<main class="wrap" id="app"></main>
+<footer>ReqSupport · форум вопросов и ответов</footer>
 
+<div class="modal" id="m"><div class="box" id="mb"></div></div>
+
+<script>
+const CATS=[["login","Вход и логин"],["reg","Регистрация"],["restore","Восстановление доступа"],["report","Жалоба на аккаунт"],["other","Другое"]];
+const cn=k=>(CATS.find(c=>c[0]==k)||[0,"Другое"])[1];
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const ld=(k,d)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}};
+const sv=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+let users=ld("rs_users",[]),me=ld("rs_me",null),topics=ld("rs_topics2",[]),cat="all",cur=null;
+const save=()=>sv("rs_topics2",topics);
+const fd=t=>new Date(t).toLocaleDateString("ru-RU",{day:"numeric",month:"short"});
+
+function hdr(){
+ document.getElementById("who").innerHTML=me?`<span class="meta">👤 ${esc(me)}</span>`:"";
+ document.getElementById("auth").innerHTML=me?`<button class="btn ghost sm" onclick="logout()">Выйти</button>`:`<button class="btn ghost sm" onclick="authM('login')">Вход</button> <button class="btn sm" onclick="authM('reg')">Регистрация</button>`;
+}
+function go(id){cur=id||null;render()}
+function render(){
+ hdr();const app=document.getElementById("app");
+ if(cur){const t=topics.find(x=>x.id==cur);if(t)return view(t,app)}
+ const q=document.getElementById("q").value.toLowerCase().trim();
+ const list=topics.filter(t=>(t.flags||[]).length<3&&(cat=="all"||t.cat==cat)&&(!q||(t.title+t.body).toLowerCase().includes(q))).sort((a,b)=>b.ts-a.ts);
+ app.innerHTML=`<div class="chips"><div class="chip ${cat=="all"?"on":""}" onclick="setCat('all')">Все</div>${CATS.map(c=>`<div class="chip ${cat==c[0]?"on":""}" onclick="setCat('${c[0]}')">${c[1]}</div>`).join("")}</div>
+ <div class="head"><h2>Вопросы</h2><button class="btn" onclick="newM()">+ Задать вопрос</button></div>
+ ${list.length?list.map(t=>`<div class="card topic" onclick="go(${t.id})"><h3>${esc(t.title)}</h3><div class="meta"><span class="tag">${cn(t.cat)}</span><span>${esc(t.author)}</span><span>${fd(t.ts)}</span><span>💬 ${t.replies.length}</span>${t.solved?'<span class="ok">✓ решён</span>':""}</div></div>`).join(""):'<div class="empty">Ничего не найдено. Задайте первый вопрос!</div>'}`;
+}
+function setCat(c){cat=c;render()}
+function view(t,app){
+ const mine=me&&me==t.author;
+ app.innerHTML=`<button class="back" onclick="go()">← Все вопросы</button>
+ <div class="card"><div class="meta"><span class="tag">${cn(t.cat)}</span><span>${esc(t.author)}</span><span>${fd(t.ts)}</span>${t.solved?'<span class="ok">✓ решён</span>':""}</div>
+ <h2 style="margin:8px 0">${esc(t.title)}</h2><div class="body">${esc(t.body)}</div>${me&&!mine?`<button class="btn ghost sm" onclick="flag(${t.id})">⚑ Пожаловаться на вопрос</button>`:""}
+ ${mine?`<button class="btn ghost sm" onclick="solve(${t.id})">${t.solved?"Снять отметку «решён»":"Отметить как решённый"}</button> <button class="btn ghost sm" onclick="del(${t.id})">Удалить</button>`:""}</div>
+ <div class="head"><h2>Ответы (${t.replies.length})</h2></div>
+ ${t.replies.map((r,i)=>(r.flags||[]).length>=3?'<div class="card reply meta">Ответ скрыт после жалоб пользователей</div>':`<div class="card reply ${r.best?"best":""}"><div class="meta"><b>${esc(r.author)}</b><span>${fd(r.ts)}</span>${r.best?'<span class="ok">✓ лучший ответ</span>':""}</div><div class="body">${esc(r.text)}</div>${me&&me!=r.author?`<button class="btn ghost sm" onclick="flag(${t.id},${i})">⚑ Пожаловаться</button>`:""}</div>`).join("")||'<div class="empty">Пока нет ответов</div>'}
+ <div class="card">${me?`<textarea id="rt" placeholder="Ваш ответ…"></textarea><button class="btn" onclick="reply(${t.id})">Ответить</button>`:`<div class="empty" style="padding:8px">Чтобы ответить, <a href="#" onclick="authM('login');return false" style="color:var(--ac)">войдите</a> или <a href="#" onclick="authM('reg');return false" style="color:var(--ac)">зарегистрируйтесь</a>.</div>`}</div>`;
+ window.scrollTo(0,0);
+}
+let lastAct=0;
+function reply(id){const x=document.getElementById("rt").value.trim();const t=topics.find(t=>t.id==id);if(x.length<5)return alert("Ответ слишком короткий");if(t.replies.some(r=>r.author==me&&r.text==x))return alert("Такой ответ уже есть");if(Date.now()-lastAct<30000)return alert("Подождите 30 секунд перед следующим сообщением");lastAct=Date.now();t.replies.push({author:me,text:x,ts:Date.now(),flags:[]});save();render()}
+function flag(id,i){if(!me)return authM("login");const t=topics.find(t=>t.id==id);const o=i==null?t:t.replies[i];o.flags=o.flags||[];if(o.flags.includes(me))return alert("Вы уже отправили жалобу");o.flags.push(me);save();alert("Жалоба принята. После 3 жалоб от разных пользователей материал скрывается.");render()}
+function solve(id){const t=topics.find(t=>t.id==id);t.solved=!t.solved;save();render()}
+function del(id){if(!confirm("Удалить вопрос?"))return;topics=topics.filter(t=>t.id!=id);save();go()}
+function modal(h){document.getElementById("mb").innerHTML=h;document.getElementById("m").classList.add("on")}
+function closeM(){document.getElementById("m").classList.remove("on")}
+document.getElementById("m").addEventListener("click",e=>{if(e.target.id=="m")closeM()});
+function authM(mode){
+ const reg=mode=="reg";
+ modal(`<h2>${reg?"Регистрация":"Вход"}</h2><label>Логин</label><input id="u" autocomplete="username"><label>Пароль</label><input id="p" type="password" autocomplete="${reg?"new-password":"current-password"}">
+ <div class="err" id="e"></div><div class="row"><button class="btn" onclick="doAuth('${mode}')">${reg?"Создать аккаунт":"Войти"}</button><button class="btn ghost" onclick="authM('${reg?"login":"reg"}')">${reg?"У меня есть аккаунт":"Нет аккаунта"}</button></div>`);
+}
+function doAuth(mode){
+ const u=document.getElementById("u").value.trim(),p=document.getElementById("p").value,e=document.getElementById("e");
+ if(u.length<3)return e.textContent="Логин: минимум 3 символа";
+ if(p.length<6)return e.textContent="Пароль: минимум 6 символов";
+ const f=users.find(x=>x.u.toLowerCase()==u.toLowerCase());
+ if(mode=="reg"){if(f)return e.textContent="Такой логин уже занят";users.push({u,p});sv("rs_users",users)}
+ else if(!f||f.p!=p)return e.textContent="Неверный логин или пароль";
+ me=mode=="reg"?u:f.u;sv("rs_me",me);closeM();render();
+}
+function logout(){me=null;sv("rs_me",null);render()}
+function newM(){
+ if(!me)return authM("login");
+ modal(`<h2>Новый вопрос</h2><label>Раздел</label><select id="nc">${CATS.map(c=>`<option value="${c[0]}">${c[1]}</option>`).join("")}</select>
+ <label>Тема</label><input id="nt" maxlength="120"><label>Описание</label><textarea id="nb" placeholder="Опишите, что именно произошло"></textarea><label style="display:flex;gap:8px;font-size:14px"><input type="checkbox" id="nr" style="width:auto;margin:3px 0 0">Подтверждаю, что описываю реальную ситуацию</label><div class="err" id="e"></div>
+ <div class="row"><button class="btn" onclick="addT()">Опубликовать</button><button class="btn ghost" onclick="closeM()">Отмена</button></div>`);
+}
+function addT(){
+ const t=document.getElementById("nt").value.trim(),b=document.getElementById("nb").value.trim();
+ const ty=document.getElementById("nc").value,e=document.getElementById("e");
+ if(t.length<5)return e.textContent="Тема слишком короткая";
+ if(b.length<(ty=="report"?40:20))return e.textContent="Опишите подробнее (для жалобы — минимум 40 символов)";
+ if(!document.getElementById("nr").checked)return e.textContent="Подтвердите, что ситуация реальная";
+ if(topics.some(x=>x.author==me&&x.title.toLowerCase()==t.toLowerCase()))return e.textContent="Такой вопрос у вас уже есть";
+ if(topics.filter(x=>x.author==me&&Date.now()-x.ts<3600000).length>=3)return e.textContent="Не более 3 вопросов в час";
+ topics.push({id:Date.now(),title:t,body:b,cat:document.getElementById("nc").value,author:me,ts:Date.now(),solved:false,replies:[],flags:[]});
+ save();closeM();cat="all";render();
+}
+render();
+</script></body></html>
